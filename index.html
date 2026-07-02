@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>問診ロープレ</title>
+  <style>
+    :root {
+      --ink: #172026;
+      --muted: #65737c;
+      --line: #d8e1e5;
+      --bg: #f5f7f6;
+      --panel: #fff;
+      --soft: #edf5f1;
+      --accent: #116b59;
+      --accent-dark: #10352f;
+      --gold: #c58a2f;
+      --ok: #197246;
+      --warn: #9b6700;
+      --shadow: 0 10px 28px rgba(24, 40, 50, .08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    button, textarea, input { font: inherit; }
+    header {
+      background: var(--accent-dark);
+      color: white;
+      padding: 14px 16px;
+      border-bottom: 4px solid var(--gold);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0;
+      line-height: 1.2;
+    }
+    .sub {
+      margin-top: 4px;
+      color: #cfe1dc;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    main {
+      width: min(820px, 100%);
+      margin: 0 auto;
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 12px;
+      min-width: 0;
+    }
+    .label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      line-height: 1.55;
+      resize: vertical;
+    }
+    .mode {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .mode label {
+      border: 1px solid var(--line);
+      background: #f8faf9;
+      border-radius: 8px;
+      padding: 10px;
+      min-height: 70px;
+      display: grid;
+      gap: 4px;
+    }
+    .mode input { margin: 0; accent-color: var(--accent); }
+    .mode span { font-weight: 800; font-size: 14px; }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .btn {
+      border: 1px solid transparent;
+      background: var(--accent);
+      color: white;
+      border-radius: 8px;
+      min-height: 44px;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+    .btn.secondary {
+      background: white;
+      color: #123b34;
+      border-color: #b9cbc5;
+    }
+    .btn.listen {
+      min-height: 86px;
+      font-size: 18px;
+      background: #0f6b5b;
+    }
+    .btn.listen.recording {
+      background: #9b2f24;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      50% { transform: scale(.99); opacity: .88; }
+    }
+    .status {
+      background: var(--soft);
+      border: 1px solid #d6e6df;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .conversation {
+      display: grid;
+      gap: 10px;
+      max-height: 46vh;
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .msg {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      font-size: 15px;
+    }
+    .msg.patient {
+      background: #fffaf0;
+      border-color: #ead9b9;
+      margin-right: 24px;
+    }
+    .msg.therapist {
+      background: #eef8f5;
+      border-color: #bfdbd3;
+      margin-left: 24px;
+    }
+    .speaker {
+      display: block;
+      color: #52656d;
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .notes {
+      display: grid;
+      gap: 8px;
+    }
+    .note {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      background: #fbfcfc;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .note.good { border-color: #bfe0cd; background: #f1faf5; }
+    .note.warn { border-color: #ecd08a; background: #fff9e8; }
+    .result {
+      min-height: 90px;
+      border: 1px solid var(--line);
+      background: #f7f9f8;
+      border-radius: 8px;
+      padding: 10px;
+      white-space: pre-wrap;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .unsupported {
+      color: #7a4b00;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    @media (max-width: 560px) {
+      main { padding: 10px; }
+      .mode, .controls { grid-template-columns: 1fr; }
+      .conversation { max-height: 42vh; }
+      textarea { min-height: 104px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>問診ロープレ</h1>
+  </header>
+
+  <main>
+    <section>
+      <label class="label" for="scenario">患者様シナリオ</label>
+      <textarea id="scenario">45歳 女性。主訴は3日前からの腰痛。仕事は介護職で、利用者さんの移乗介助後から痛みが強くなった。前かがみと立ち上がりがつらい。足のしびれはないが、また仕事で悪化しないか不安。早く普通に働けるようになりたい。</textarea>
+      <div class="mode">
+        <label>
+          <input type="radio" name="mode" value="opening" checked>
+          <span>オープニング</span>
+        </label>
+        <label>
+          <input type="radio" name="mode" value="interview">
+          <span>問診</span>
+        </label>
+      </div>
+      <div class="controls">
+        <button class="btn" id="startBtn" type="button">開始</button>
+        <button class="btn secondary" id="resetBtn" type="button">リセット</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="status" id="status">開始してから進めてください。</div>
+      <button class="btn listen" id="listenBtn" type="button">話す</button>
+      <div class="unsupported" id="supportText"></div>
+    </section>
+
+    <section>
+      <span class="label">会話</span>
+      <div class="conversation" id="conversation"></div>
+    </section>
+
+    <section>
+      <span class="label">フィードバック</span>
+      <div class="notes" id="notes"></div>
+      <div class="controls">
+        <button class="btn secondary" id="finishBtn" type="button">講評を出す</button>
+        <button class="btn secondary" id="repeatBtn" type="button">もう一度聞く</button>
+      </div>
+      <div class="result" id="result">患者様が治療を受けたいと感じられたか、不安や疑問が残っていないかを中心に講評します。</div>
+    </section>
+  </main>
+
+  <script>
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const canListen = Boolean(SpeechRecognition);
+    const canSpeak = "speechSynthesis" in window;
+
+    const els = {
+      scenario: document.getElementById("scenario"),
+      startBtn: document.getElementById("startBtn"),
+      resetBtn: document.getElementById("resetBtn"),
+      listenBtn: document.getElementById("listenBtn"),
+      finishBtn: document.getElementById("finishBtn"),
+      repeatBtn: document.getElementById("repeatBtn"),
+      status: document.getElementById("status"),
+      supportText: document.getElementById("supportText"),
+      conversation: document.getElementById("conversation"),
+      notes: document.getElementById("notes"),
+      result: document.getElementById("result")
+    };
+
+    const state = {
+      started: false,
+      listening: false,
+      mode: "opening",
+      scenario: "",
+      profile: {},
+      lastPatientReply: "",
+      turns: [],
+      notes: [],
+      scores: {
+        ownership: 0,
+        reassurance: 0,
+        clarity: 0,
+        collaboration: 0
+      }
+    };
+
+    let recognition = null;
+
+    function selectedMode() {
+      return document.querySelector("input[name='mode']:checked").value;
+    }
+
+    function parseScenario(text) {
+      const age = text.match(/(\d{1,3})歳/)?.[1] || "";
+      const gender = text.match(/(男性|女性|男|女)/)?.[1] || "";
+      const jobMatch = text.match(/仕事は([^。]+)|職業は([^。]+)|([^。]+職)/);
+      const painMatch = text.match(/主訴は([^。]+)|([^。]+痛)[。]?/);
+      const worry = text.match(/不安[^。]*|心配[^。]*|怖[^。]*/)?.[0] || "";
+      const goal = text.match(/([^。]*(?:たい|戻りたい|できるようになりたい)[^。]*)/)?.[1] || "";
+      return {
+        age,
+        gender,
+        job: jobMatch?.[1] || jobMatch?.[2] || jobMatch?.[3] || "",
+        pain: painMatch?.[1] || painMatch?.[2] || "症状",
+        worry,
+        goal
+      };
+    }
+
+    function startRoleplay() {
+      stopSpeaking();
+      state.started = true;
+      state.mode = selectedMode();
+      state.scenario = els.scenario.value.trim() || "症状があり、不安を感じて来院した患者様。";
+      state.profile = parseScenario(state.scenario);
+      state.turns = [];
+      state.notes = [];
+      state.scores = { ownership: 0, reassurance: 0, clarity: 0, collaboration: 0 };
+      state.lastPatientReply = "";
+      els.conversation.innerHTML = "";
+      els.result.textContent = "講評を出すと、会話全体の印象と次に直すポイントを表示します。";
+      const first = state.mode === "opening"
+        ? `今日はお願いします。${state.profile.pain}があって来ました。少し不安です。`
+        : `${state.profile.pain}で来ました。${state.profile.worry || "このまま悪くならないかが心配です。"}`;
+      patientSay(first);
+      pushNote("warn", state.mode === "opening"
+        ? "まずは患者様が話し出しやすい空気を作れると、会話が進めやすくなります。"
+        : "症状だけでなく、患者様が何を心配しているかも聞けると会話が深まります。");
+      setStatus("開始しました。");
+      updateUi();
+    }
+
+    function toggleListen() {
+      if (!canListen) {
+        setStatus("この環境では利用できません。");
+        return;
+      }
+      if (!state.started) startRoleplay();
+      if (state.listening) {
+        recognition.stop();
+        return;
+      }
+      stopSpeaking();
+      recognition = new SpeechRecognition();
+      recognition.lang = "ja-JP";
+      recognition.interimResults = false;
+      recognition.continuous = false;
+      recognition.onstart = () => {
+        state.listening = true;
+        els.listenBtn.classList.add("recording");
+        els.listenBtn.textContent = "聞き取り中";
+        setStatus("どうぞ。");
+      };
+      recognition.onresult = event => {
+        const text = event.results[0][0].transcript.trim();
+        if (text) handleTherapistSpeech(text);
+      };
+      recognition.onerror = event => {
+        setStatus(`うまく聞き取れませんでした：${event.error}`);
+      };
+      recognition.onend = () => {
+        state.listening = false;
+        els.listenBtn.classList.remove("recording");
+        els.listenBtn.textContent = "話す";
+      };
+      recognition.start();
+    }
+
+    function handleTherapistSpeech(text) {
+      addMessage("therapist", text);
+      state.turns.push(text);
+      analyze(text);
+      const reply = patientResponse(text);
+      patientSay(reply);
+      updateUi();
+    }
+
+    function patientSay(text) {
+      state.lastPatientReply = text;
+      addMessage("patient", text);
+      speak(text);
+    }
+
+    function speak(text) {
+      if (!canSpeak) return;
+      stopSpeaking();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "ja-JP";
+      utterance.rate = 1.02;
+      utterance.pitch = 1.05;
+      utterance.onstart = () => setStatus("患者様");
+      utterance.onend = () => setStatus("続けてください。");
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function stopSpeaking() {
+      if (canSpeak) window.speechSynthesis.cancel();
+    }
+
+    function patientResponse(text) {
+      const asks = /[？?]|ですか|ますか|教えて|ありますか|どう|何|いつ|どこ/.test(text);
+      const accepted = /一緒|確認|方針|目標|進め|相談|選択|合って|よさそう|大丈夫/.test(text);
+      const worry = /不安|心配|疑問|怖|気になる|分からない/.test(text);
+      const explain = /理由|原因|見通し|流れ|順番|最後|説明|整理/.test(text);
+
+      if (state.mode === "opening") {
+        if (accepted && explain && worry) return "そう言ってもらえると安心します。何をするのか分かるなら、ちゃんと話せそうです。";
+        if (explain || accepted) return "はい、お願いします。流れが分かると少し安心します。";
+        if (asks) return scenarioAnswer(text);
+        return "少し緊張しています。どう進むのか分かると助かります。";
+      }
+
+      if (accepted && worry) return "そこを聞いてもらえると安心します。自分でも何に気をつければいいか知りたいです。";
+      if (accepted) return "はい、その目標なら頑張れそうです。自分でもできることがあるなら知りたいです。";
+      if (asks) return scenarioAnswer(text);
+      return "このまま治療を受けてよいのか、家で何をすればいいのかも知りたいです。";
+    }
+
+    function scenarioAnswer(text) {
+      const p = state.profile;
+      if (/いつ|きっかけ|始ま|経過|前から/.test(text)) return extractSentence(/から|後|前|始|強く|徐々|急に/) || "数日前から気になっています。きっかけははっきりしない部分もあります。";
+      if (/仕事|家事|生活|困|睡眠|趣味|でき/.test(text)) return p.goal || `仕事や普段の動きで困っています。${p.job ? `${p.job}なので、動けないと不安です。` : ""}`;
+      if (/不安|心配|疑問|怖|知りたい/.test(text)) return p.worry || "原因と、どのくらいで良くなるのかが分からないのが不安です。";
+      if (/痛|場所|強さ|どこ|しびれ|動き/.test(text)) return extractSentence(/痛|つら|しびれ|動き|前かがみ|立ち上がり|歩/) || "動かすとつらいです。詳しく聞かれると整理して話せそうです。";
+      if (/目標|戻|できるよう|治療|方針/.test(text)) return p.goal || "まずは普段の生活に戻れる見通しが欲しいです。";
+      return "そこはまだうまく整理できていません。もう少し具体的に聞いてもらえると答えやすいです。";
+    }
+
+    function extractSentence(pattern) {
+      return state.scenario.split("。").map(s => s.trim()).find(s => pattern.test(s)) || "";
+    }
+
+    function analyze(text) {
+      addScore("ownership", ["一緒", "目標", "できる", "生活", "仕事", "家で", "セルフ", "自分", "戻"], text);
+      addScore("reassurance", ["不安", "心配", "大丈夫", "安心", "無理", "遠慮", "疑問"], text);
+      addScore("clarity", ["流れ", "順番", "理由", "説明", "整理", "方針", "見通し", "確認"], text);
+      addScore("collaboration", ["合って", "よさそう", "どうですか", "相談", "選", "進め", "一緒"], text);
+      if (text.length > 95) pushNote("warn", "少し長めです。短く伝えて確認を挟むと安心感が上がります。");
+      if (/[？?]|ですか|ますか|どう|何|いつ/.test(text)) pushNote("good", "患者様が話す余白があります。一方通行になりにくいです。");
+      if (/不安|心配|疑問/.test(text)) pushNote("good", "不安や疑問を明示的に扱えています。治療前の迷いを減らす声かけです。");
+      if (/一緒|目標|できる|生活|仕事|家で/.test(text)) pushNote("good", "患者様自身が治療に参加する理由を作れています。当事者意識につながります。");
+      if (!/[？?]|ですか|ますか|確認|合って|どう/.test(text)) pushNote("warn", "説明で終わっています。最後に疑問が残っていないか確認すると進めやすいです。");
+    }
+
+    function addScore(key, words, text) {
+      if (words.some(word => text.includes(word))) state.scores[key] = Math.min(100, state.scores[key] + 28);
+    }
+
+    function finish() {
+      if (!state.started) startRoleplay();
+      const total = Math.round(Object.values(state.scores).reduce((a, b) => a + b, 0) / 4);
+      const weak = Object.entries(state.scores).sort((a, b) => a[1] - b[1])[0][0];
+      const weakText = {
+        ownership: "患者様が自分ごとにできる生活目標へつなげる",
+        reassurance: "不安や疑問を拾い、残っていないか確認する",
+        clarity: "今日の流れ、理由、見通しを短く伝える",
+        collaboration: "方針を押し切らず、合意を取って進める"
+      };
+      const headline = total >= 70
+        ? "患者様は、安心して治療を受けてみようと感じやすい会話になっています。"
+        : "まだ少し、施術者側が進める会話に聞こえやすいです。";
+      els.result.textContent = [
+        headline,
+        total >= 70
+          ? "理由や流れを伝えながら、患者様の不安や目標にも触れられています。このまま「ここまでで疑問は残っていますか？」と確認できると、さらに納得して進めます。"
+          : "次は、症状を聞いたあとに「何が一番不安ですか」「まず何ができるようになると安心ですか」を入れると、患者様が自分ごととして治療に向き合いやすくなります。",
+        `次に意識すること：${weakText[weak]}。`
+      ].join("\n");
+    }
+
+    function updateUi() {
+      els.notes.innerHTML = state.notes.length
+        ? state.notes.slice(-4).map(note => `<div class="note ${note.type}">${escapeHtml(note.text)}</div>`).join("")
+        : `<div class="note">短く伝えて、患者様の反応を待つのがコツです。</div>`;
+    }
+
+    function addMessage(role, text) {
+      const div = document.createElement("div");
+      div.className = `msg ${role}`;
+      div.innerHTML = `<span class="speaker">${role === "patient" ? "患者様" : "施術者"}</span>${escapeHtml(text)}`;
+      els.conversation.appendChild(div);
+      els.conversation.scrollTop = els.conversation.scrollHeight;
+    }
+
+    function pushNote(type, text) {
+      const last = state.notes[state.notes.length - 1];
+      if (!last || last.text !== text) state.notes.push({ type, text });
+    }
+
+    function setStatus(text) {
+      els.status.textContent = text;
+    }
+
+    function reset() {
+      stopSpeaking();
+      state.started = false;
+      state.listening = false;
+      state.turns = [];
+      state.notes = [];
+      state.lastPatientReply = "";
+      state.scores = { ownership: 0, reassurance: 0, clarity: 0, collaboration: 0 };
+      els.conversation.innerHTML = "";
+      els.result.textContent = "講評を出すと、会話全体の印象と次に直すポイントを表示します。";
+      setStatus("開始してから進めてください。");
+      updateUi();
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    if (!canListen || !canSpeak) els.supportText.textContent = "この環境では一部機能が使えない場合があります。";
+
+    els.startBtn.addEventListener("click", startRoleplay);
+    els.resetBtn.addEventListener("click", reset);
+    els.listenBtn.addEventListener("click", toggleListen);
+    els.finishBtn.addEventListener("click", finish);
+    els.repeatBtn.addEventListener("click", () => {
+      if (state.lastPatientReply) speak(state.lastPatientReply);
+    });
+    document.querySelectorAll("input[name='mode']").forEach(input => {
+      input.addEventListener("change", () => {
+        state.mode = selectedMode();
+      });
+    });
+    updateUi();
+  </script>
+</body>
+</html>
