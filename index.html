@@ -169,9 +169,36 @@
       font-weight: 800;
       margin-bottom: 4px;
     }
-    .notes {
+    .history {
       display: grid;
       gap: 8px;
+    }
+    .history-list {
+      display: grid;
+      gap: 7px;
+      max-height: 190px;
+      overflow: auto;
+    }
+    .history-item {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: #fbfcfc;
+      border-radius: 8px;
+      padding: 9px 10px;
+      cursor: pointer;
+      color: var(--ink);
+    }
+    .history-item strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+    .history-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
     }
     .note {
       padding: 9px 10px;
@@ -232,6 +259,11 @@
     </section>
 
     <section>
+      <span class="label">シナリオ履歴</span>
+      <div class="history-list" id="scenarioHistory"></div>
+    </section>
+
+    <section>
       <div class="status" id="status">開始してから進めてください。</div>
       <button class="btn listen" id="listenBtn" type="button">話す</button>
       <div class="unsupported" id="supportText"></div>
@@ -244,12 +276,16 @@
 
     <section>
       <span class="label">フィードバック</span>
-      <div class="notes" id="notes"></div>
       <div class="controls">
         <button class="btn secondary" id="finishBtn" type="button">講評を出す</button>
         <button class="btn secondary" id="repeatBtn" type="button">もう一度聞く</button>
       </div>
-      <div class="result" id="result">患者様が治療を受けたいと感じられたか、不安や疑問が残っていないかを中心に講評します。</div>
+      <div class="result" id="result"></div>
+    </section>
+
+    <section>
+      <span class="label">フィードバック履歴</span>
+      <div class="history-list" id="feedbackHistory"></div>
     </section>
   </main>
 
@@ -268,8 +304,14 @@
       status: document.getElementById("status"),
       supportText: document.getElementById("supportText"),
       conversation: document.getElementById("conversation"),
-      notes: document.getElementById("notes"),
-      result: document.getElementById("result")
+      result: document.getElementById("result"),
+      scenarioHistory: document.getElementById("scenarioHistory"),
+      feedbackHistory: document.getElementById("feedbackHistory")
+    };
+
+    const storageKeys = {
+      scenarios: "monsin-roleplay-scenarios",
+      feedback: "monsin-roleplay-feedback"
     };
 
     const state = {
@@ -323,14 +365,12 @@
       state.scores = { ownership: 0, reassurance: 0, clarity: 0, collaboration: 0 };
       state.lastPatientReply = "";
       els.conversation.innerHTML = "";
-      els.result.textContent = "講評を出すと、会話全体の印象と次に直すポイントを表示します。";
+      els.result.textContent = "";
+      saveScenarioHistory();
       const first = state.mode === "opening"
         ? `今日はお願いします。${state.profile.pain}があって来ました。少し不安です。`
         : `${state.profile.pain}で来ました。${state.profile.worry || "このまま悪くならないかが心配です。"}`;
       patientSay(first);
-      pushNote("warn", state.mode === "opening"
-        ? "まずは患者様が話し出しやすい空気を作れると、会話が進めやすくなります。"
-        : "症状だけでなく、患者様が何を心配しているかも聞けると会話が深まります。");
       setStatus("開始しました。");
       updateUi();
     }
@@ -440,11 +480,6 @@
       addScore("reassurance", ["不安", "心配", "大丈夫", "安心", "無理", "遠慮", "疑問"], text);
       addScore("clarity", ["流れ", "順番", "理由", "説明", "整理", "方針", "見通し", "確認"], text);
       addScore("collaboration", ["合って", "よさそう", "どうですか", "相談", "選", "進め", "一緒"], text);
-      if (text.length > 95) pushNote("warn", "少し長めです。短く伝えて確認を挟むと安心感が上がります。");
-      if (/[？?]|ですか|ますか|どう|何|いつ/.test(text)) pushNote("good", "患者様が話す余白があります。一方通行になりにくいです。");
-      if (/不安|心配|疑問/.test(text)) pushNote("good", "不安や疑問を明示的に扱えています。治療前の迷いを減らす声かけです。");
-      if (/一緒|目標|できる|生活|仕事|家で/.test(text)) pushNote("good", "患者様自身が治療に参加する理由を作れています。当事者意識につながります。");
-      if (!/[？?]|ですか|ますか|確認|合って|どう/.test(text)) pushNote("warn", "説明で終わっています。最後に疑問が残っていないか確認すると進めやすいです。");
     }
 
     function addScore(key, words, text) {
@@ -464,19 +499,21 @@
       const headline = total >= 70
         ? "患者様は、安心して治療を受けてみようと感じやすい会話になっています。"
         : "まだ少し、施術者側が進める会話に聞こえやすいです。";
-      els.result.textContent = [
+      const feedback = [
         headline,
         total >= 70
           ? "理由や流れを伝えながら、患者様の不安や目標にも触れられています。このまま「ここまでで疑問は残っていますか？」と確認できると、さらに納得して進めます。"
           : "次は、症状を聞いたあとに「何が一番不安ですか」「まず何ができるようになると安心ですか」を入れると、患者様が自分ごととして治療に向き合いやすくなります。",
         `次に意識すること：${weakText[weak]}。`
       ].join("\n");
+      els.result.textContent = feedback;
+      saveFeedbackHistory(feedback);
+      updateUi();
     }
 
     function updateUi() {
-      els.notes.innerHTML = state.notes.length
-        ? state.notes.slice(-4).map(note => `<div class="note ${note.type}">${escapeHtml(note.text)}</div>`).join("")
-        : `<div class="note">短く伝えて、患者様の反応を待つのがコツです。</div>`;
+      renderScenarioHistory();
+      renderFeedbackHistory();
     }
 
     function addMessage(role, text) {
@@ -487,13 +524,93 @@
       els.conversation.scrollTop = els.conversation.scrollHeight;
     }
 
-    function pushNote(type, text) {
-      const last = state.notes[state.notes.length - 1];
-      if (!last || last.text !== text) state.notes.push({ type, text });
-    }
-
     function setStatus(text) {
       els.status.textContent = text;
+    }
+
+    function readHistory(key) {
+      try {
+        return JSON.parse(localStorage.getItem(key) || "[]");
+      } catch {
+        return [];
+      }
+    }
+
+    function writeHistory(key, items) {
+      localStorage.setItem(key, JSON.stringify(items.slice(0, 20)));
+    }
+
+    function saveScenarioHistory() {
+      const items = readHistory(storageKeys.scenarios);
+      const entry = {
+        id: Date.now(),
+        date: new Date().toLocaleString("ja-JP"),
+        mode: state.mode,
+        scenario: state.scenario
+      };
+      const deduped = items.filter(item => item.scenario !== entry.scenario || item.mode !== entry.mode);
+      writeHistory(storageKeys.scenarios, [entry, ...deduped]);
+    }
+
+    function saveFeedbackHistory(feedback) {
+      const items = readHistory(storageKeys.feedback);
+      const entry = {
+        id: Date.now(),
+        date: new Date().toLocaleString("ja-JP"),
+        mode: state.mode,
+        scenario: state.scenario,
+        feedback
+      };
+      writeHistory(storageKeys.feedback, [entry, ...items]);
+    }
+
+    function renderScenarioHistory() {
+      const items = readHistory(storageKeys.scenarios);
+      els.scenarioHistory.innerHTML = items.length
+        ? items.map(item => `
+          <button type="button" class="history-item" data-scenario-id="${item.id}">
+            <strong>${escapeHtml(item.mode === "opening" ? "オープニング" : "問診")} / ${escapeHtml(item.date)}</strong>
+            <span>${escapeHtml(shortText(item.scenario))}</span>
+          </button>
+        `).join("")
+        : `<div class="note">まだありません。</div>`;
+      els.scenarioHistory.querySelectorAll("[data-scenario-id]").forEach(button => {
+        button.addEventListener("click", () => {
+          const selected = readHistory(storageKeys.scenarios).find(item => String(item.id) === button.dataset.scenarioId);
+          if (!selected) return;
+          els.scenario.value = selected.scenario;
+          document.querySelector(`input[name="mode"][value="${selected.mode}"]`).checked = true;
+          state.mode = selected.mode;
+          setStatus("読み込みました。");
+        });
+      });
+    }
+
+    function renderFeedbackHistory() {
+      const items = readHistory(storageKeys.feedback);
+      els.feedbackHistory.innerHTML = items.length
+        ? items.map(item => `
+          <button type="button" class="history-item" data-feedback-id="${item.id}">
+            <strong>${escapeHtml(item.mode === "opening" ? "オープニング" : "問診")} / ${escapeHtml(item.date)}</strong>
+            <span>${escapeHtml(shortText(item.feedback))}</span>
+          </button>
+        `).join("")
+        : `<div class="note">まだありません。</div>`;
+      els.feedbackHistory.querySelectorAll("[data-feedback-id]").forEach(button => {
+        button.addEventListener("click", () => {
+          const selected = readHistory(storageKeys.feedback).find(item => String(item.id) === button.dataset.feedbackId);
+          if (!selected) return;
+          els.scenario.value = selected.scenario;
+          document.querySelector(`input[name="mode"][value="${selected.mode}"]`).checked = true;
+          state.mode = selected.mode;
+          els.result.textContent = selected.feedback;
+          setStatus("読み込みました。");
+        });
+      });
+    }
+
+    function shortText(text) {
+      return text.length > 78 ? `${text.slice(0, 78)}...` : text;
     }
 
     function reset() {
@@ -505,7 +622,7 @@
       state.lastPatientReply = "";
       state.scores = { ownership: 0, reassurance: 0, clarity: 0, collaboration: 0 };
       els.conversation.innerHTML = "";
-      els.result.textContent = "講評を出すと、会話全体の印象と次に直すポイントを表示します。";
+      els.result.textContent = "";
       setStatus("開始してから進めてください。");
       updateUi();
     }
