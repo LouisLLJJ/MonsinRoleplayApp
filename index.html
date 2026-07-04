@@ -245,7 +245,7 @@
       <div class="mode">
         <label>
           <input type="radio" name="mode" value="opening" checked>
-          <span>術後の治療計画</span>
+          <span>オープニング</span>
         </label>
         <label>
           <input type="radio" name="mode" value="interview">
@@ -446,7 +446,7 @@
       const explain = /理由|原因|見通し|流れ|順番|最後|説明|整理/.test(text);
 
       if (state.mode === "opening") {
-        if (asks) return scenarioAnswer(text);
+        if (asks) return openingPlanAnswer(text);
         if (accepted && explain && worry) return planReaction("それなら続けられそうです。ただ、無理に動かしていいのかは確認したいです。");
         if (explain || accepted) return planReaction("流れは分かりました。自宅で何をどこまでやっていいかも知りたいです。");
         return planReaction("分かりました。自分の場合、どこまで動かしていいのかを知りたいです。");
@@ -456,6 +456,23 @@
       if (accepted) return "はい、その目標なら頑張れそうです。自分でもできることがあるなら知りたいです。";
       if (asks) return scenarioAnswer(text);
       return "このまま治療を受けてよいのか、家で何をすればいいのかも知りたいです。";
+    }
+
+    function openingPlanAnswer(text) {
+      const direct = bestScenarioSentence(text);
+      if (/計画|流れ|方針|進め|リハビリ|治療|説明|今日|今後|次回/.test(text)) {
+        return planReaction(direct || "今日からどう進めるのかを知りたいです。家でやることも分かると助かります。");
+      }
+      if (/家|自宅|運動|歩|階段|曲げ|伸ば|どこまで|やって|注意|無理/.test(text)) {
+        return planReaction(direct || "家でどこまで動かしていいのかを確認したいです。");
+      }
+      if (/目標|戻|仕事|生活|散歩|畑|趣味/.test(text)) {
+        return planReaction(direct || state.profile.goal || "普段の生活に戻る目安を知りたいです。");
+      }
+      if (/痛|腫れ|熱|こわ|心配|悪く|人工/.test(text)) {
+        return planReaction(direct || state.profile.worry || "悪くならない範囲を知りたいです。");
+      }
+      return planReaction(direct || "今日の話で、自分が何をすればいいか分かると助かります。");
     }
 
     function scenarioAnswer(text) {
@@ -618,7 +635,7 @@
       els.scenarioHistory.innerHTML = items.length
         ? items.map(item => `
           <button type="button" class="history-item" data-scenario-id="${item.id}">
-            <strong>${escapeHtml(item.mode === "opening" ? "術後の治療計画" : "問診")} / ${escapeHtml(item.date)}</strong>
+            <strong>${escapeHtml(item.mode === "opening" ? "オープニング" : "問診")} / ${escapeHtml(item.date)}</strong>
             <span>${escapeHtml(shortText(item.scenario))}</span>
           </button>
         `).join("")
@@ -640,7 +657,7 @@
       els.feedbackHistory.innerHTML = items.length
         ? items.map(item => `
           <button type="button" class="history-item" data-feedback-id="${item.id}">
-            <strong>${escapeHtml(item.mode === "opening" ? "術後の治療計画" : "問診")} / ${escapeHtml(item.date)}</strong>
+            <strong>${escapeHtml(item.mode === "opening" ? "オープニング" : "問診")} / ${escapeHtml(item.date)}</strong>
             <span>${escapeHtml(shortText(item.feedback))}</span>
           </button>
         `).join("")
