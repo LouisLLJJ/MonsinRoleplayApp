@@ -344,13 +344,20 @@
       const painMatch = text.match(/主訴は([^。]+)|([^。]+痛)[。]?/);
       const worry = text.match(/不安[^。]*|心配[^。]*|怖[^。]*/)?.[0] || "";
       const goal = text.match(/([^。]*(?:たい|戻りたい|できるようになりたい)[^。]*)/)?.[1] || "";
+      const sentences = splitScenario(text);
       return {
         age,
         gender,
         job: jobMatch?.[1] || jobMatch?.[2] || jobMatch?.[3] || "",
         pain: painMatch?.[1] || painMatch?.[2] || "症状",
         worry,
-        goal
+        goal,
+        surgery: findByCategory(sentences, "surgery"),
+        symptom: findByCategory(sentences, "symptom"),
+        activity: findByCategory(sentences, "activity"),
+        living: findByCategory(sentences, "living"),
+        concern: findByCategory(sentences, "concern"),
+        sentences
       };
     }
 
@@ -440,53 +447,45 @@
     }
 
     function patientResponse(text) {
-      const asks = /[？?]|ですか|ますか|教えて|ありますか|どう|何|いつ|どこ/.test(text);
+      const intent = detectIntent(text);
       const accepted = /一緒|確認|方針|目標|進め|相談|選択|合って|よさそう|大丈夫/.test(text);
       const worry = /不安|心配|疑問|怖|気になる|分からない/.test(text);
       const explain = /理由|原因|見通し|流れ|順番|最後|説明|整理/.test(text);
 
       if (state.mode === "opening") {
-        if (asks) return openingPlanAnswer(text);
+        if (intent !== "statement") return openingPlanAnswer(text, intent);
         if (accepted && explain && worry) return planReaction("それなら続けられそうです。ただ、無理に動かしていいのかは確認したいです。");
-        if (explain || accepted) return planReaction("流れは分かりました。自宅で何をどこまでやっていいかも知りたいです。");
-        return planReaction("分かりました。自分の場合、どこまで動かしていいのかを知りたいです。");
+        if (explain || accepted) return patientLine("はい。流れは分かりました。家で何をどこまでやっていいかも知りたいです。");
+        return patientLine("はい。自分の場合、どこまで動かしていいのかを知りたいです。");
       }
 
-      if (accepted && worry) return "そこを聞いてもらえると安心します。自分でも何に気をつければいいか知りたいです。";
-      if (accepted) return "はい、その目標なら頑張れそうです。自分でもできることがあるなら知りたいです。";
-      if (asks) return scenarioAnswer(text);
-      return "このまま治療を受けてよいのか、家で何をすればいいのかも知りたいです。";
+      if (accepted && worry) return patientLine("そこを確認してもらえると助かります。家で気をつけることも知りたいです。");
+      if (accepted) return patientLine("はい。その進め方ならやってみます。家でできることも教えてください。");
+      if (intent !== "statement") return scenarioAnswer(text, intent);
+      return patientLine("分かりました。自分の場合は何をすればいいか、もう少し具体的に知りたいです。");
     }
 
-    function openingPlanAnswer(text) {
-      const direct = bestScenarioSentence(text);
-      if (/計画|流れ|方針|進め|リハビリ|治療|説明|今日|今後|次回/.test(text)) {
-        return planReaction(direct || "今日からどう進めるのかを知りたいです。家でやることも分かると助かります。");
-      }
-      if (/家|自宅|運動|歩|階段|曲げ|伸ば|どこまで|やって|注意|無理/.test(text)) {
-        return planReaction(direct || "家でどこまで動かしていいのかを確認したいです。");
-      }
-      if (/目標|戻|仕事|生活|散歩|畑|趣味/.test(text)) {
-        return planReaction(direct || state.profile.goal || "普段の生活に戻る目安を知りたいです。");
-      }
-      if (/痛|腫れ|熱|こわ|心配|悪く|人工/.test(text)) {
-        return planReaction(direct || state.profile.worry || "悪くならない範囲を知りたいです。");
-      }
-      return planReaction(direct || "今日の話で、自分が何をすればいいか分かると助かります。");
-    }
-
-    function scenarioAnswer(text) {
+    function openingPlanAnswer(text, intent) {
       const p = state.profile;
-      const direct = bestScenarioSentence(text);
-      if (/術後|手術|人工|傷|腫れ|リハビリ|治療|計画|方針|運動|歩行|階段|曲げ|伸ば|禁忌|注意/.test(text)) {
-        return planReaction(direct || p.worry || p.goal || "どこまで動かしていいのかを知りたいです。");
-      }
-      if (/いつ|きっかけ|始ま|経過|前から/.test(text)) return direct || extractSentence(/から|後|前|始|強く|徐々|急に|術後|退院/) || "経過はまだ自分でも整理しきれていません。";
-      if (/仕事|家事|生活|困|睡眠|趣味|でき|戻/.test(text)) return direct || p.goal || `生活の中で困る場面があります。${p.job ? `${p.job}なので、動けないと不安です。` : ""}`;
-      if (/不安|心配|疑問|怖|知りたい/.test(text)) return direct || p.worry || "原因や見通しが分からないところを確認したいです。";
-      if (/痛|場所|強さ|どこ|しびれ|動き|歩|階段|曲げ|伸ば/.test(text)) return direct || extractSentence(/痛|つら|しびれ|動き|歩|階段|曲げ|伸ば|前かがみ|立ち上がり/) || "動かすとつらいです。詳しく聞かれると整理して話せそうです。";
-      if (/目標|希望|したい|治療|方針/.test(text)) return direct || p.goal || "まずは普段の生活に戻れる見通しが欲しいです。";
-      return direct || "そこはまだうまく整理できていません。もう少し具体的に聞いてもらえると答えやすいです。";
+      if (intent === "plan") return patientLine(`はい。${p.symptom || p.surgery || "今の状態"}なので、今日からどう進めるのか知りたいです。`);
+      if (intent === "home") return patientLine(`${p.living || "家で過ごしています"}。家では何をどこまでやっていいかを確認したいです。`);
+      if (intent === "activity") return patientLine(`${p.activity || p.symptom || "動く時に気になります"}。特にどこまで動かしていいかを知りたいです。`);
+      if (intent === "goal") return patientLine(p.goal || p.activity || "普段の生活に戻る目安を知りたいです。");
+      if (intent === "concern") return patientLine(p.concern || p.worry || "悪くならない範囲を知りたいです。");
+      if (intent === "pain") return patientLine(p.symptom || "動かす時に痛みがあります。");
+      return patientLine(`はい。${p.concern || p.goal || "自分が何をすればいいか分かると助かります。"}`);
+    }
+
+    function scenarioAnswer(text, intent) {
+      const p = state.profile;
+      if (intent === "timeline") return patientLine(p.surgery || extractSentence(/から|後|前|始|術後|退院/) || "いつからかは、まだ自分でもはっきり整理できていません。");
+      if (intent === "pain") return patientLine(p.symptom || extractSentence(/痛|つら|しびれ|動き|歩|階段|曲げ|伸ば/) || "動かす時に痛みがあります。");
+      if (intent === "activity") return patientLine(p.activity || p.symptom || "動く場面で困っています。");
+      if (intent === "home") return patientLine(p.living || "家での過ごし方を確認したいです。");
+      if (intent === "goal") return patientLine(p.goal || p.activity || "普段の生活に戻れる目安を知りたいです。");
+      if (intent === "concern") return patientLine(p.concern || p.worry || "悪くしないために何に気をつければいいか知りたいです。");
+      if (intent === "plan") return patientLine(`${p.symptom || p.surgery || "今の状態"}なので、今後の進め方を知りたいです。`);
+      return patientLine(bestScenarioSentence(text) || p.symptom || p.goal || "もう少し具体的に聞いてもらえると答えやすいです。");
     }
 
     function naturalizePatientText(text) {
@@ -502,14 +501,46 @@
     }
 
     function extractSentence(pattern) {
-      return state.scenario.split("。").map(s => s.trim()).find(s => pattern.test(s)) || "";
+      return splitScenario(state.scenario).find(s => pattern.test(s)) || "";
     }
 
-    function scenarioSentences() {
-      return state.scenario
+    function splitScenario(text) {
+      return text
         .split(/[。！？\n]/)
         .map(s => s.trim())
         .filter(Boolean);
+    }
+
+    function scenarioSentences() {
+      return splitScenario(state.scenario);
+    }
+
+    function findByCategory(sentences, category) {
+      const patterns = {
+        surgery: /術後|手術|人工|退院|受傷|発症|から|後/,
+        symptom: /痛|つら|しびれ|腫れ|熱|曲げ|伸ば|歩き|階段|こわ/,
+        activity: /仕事|家事|生活|趣味|散歩|畑|歩|階段|戻りたい|できるよう/,
+        living: /自宅|一人暮らし|二人暮らし|妻|夫|家族|退院後/,
+        concern: /心配|こわ|怖|気になる|悪影響|無理|大丈夫|不安/
+      };
+      return sentences.find(sentence => patterns[category].test(sentence)) || "";
+    }
+
+    function detectIntent(text) {
+      if (/いつ|何日|何週|経過|きっかけ|始ま|前から/.test(text)) return "timeline";
+      if (/痛|どこ|強さ|しびれ|腫れ|熱|曲げ|伸ば/.test(text)) return "pain";
+      if (/歩|階段|動|運動|リハビリ|でき|困|仕事|散歩|畑|家事/.test(text)) return "activity";
+      if (/家|自宅|家で|妻|夫|家族|生活|注意/.test(text)) return "home";
+      if (/目標|戻|希望|したい|どうなりたい/.test(text)) return "goal";
+      if (/心配|こわ|怖|気になる|不安|疑問|悪く|大丈夫|人工/.test(text)) return "concern";
+      if (/計画|流れ|方針|進め|治療|説明|今日|今後|次回|見通し/.test(text)) return "plan";
+      if (/[？?]|ですか|ますか|教えて|ありますか|どう|何|いつ|どこ/.test(text)) return "general";
+      return "statement";
+    }
+
+    function patientLine(text) {
+      const cleaned = naturalizePatientText(text).trim();
+      return cleaned.endsWith("。") || cleaned.endsWith("？") ? cleaned : `${cleaned}。`;
     }
 
     function bestScenarioSentence(question) {
