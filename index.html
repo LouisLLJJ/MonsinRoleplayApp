@@ -241,11 +241,11 @@
   <main>
     <section>
       <label class="label" for="scenario">患者様シナリオ</label>
-      <textarea id="scenario">45歳 女性。主訴は3日前からの腰痛。仕事は介護職で、利用者さんの移乗介助後から痛みが強くなった。前かがみと立ち上がりがつらい。足のしびれはないが、また仕事で悪化しないか不安。早く普通に働けるようになりたい。</textarea>
+      <textarea id="scenario">68歳 男性。右膝人工関節置換術後2週。痛みは歩き始めと階段で強く、膝の曲げ伸ばしがこわい。退院後は自宅で妻と二人暮らし。畑仕事と30分の散歩に戻りたい。無理に動かして人工関節に悪影響が出ないか心配している。</textarea>
       <div class="mode">
         <label>
           <input type="radio" name="mode" value="opening" checked>
-          <span>オープニング</span>
+          <span>術後の治療計画</span>
         </label>
         <label>
           <input type="radio" name="mode" value="interview">
@@ -358,7 +358,7 @@
       stopSpeaking();
       state.started = true;
       state.mode = selectedMode();
-      state.scenario = els.scenario.value.trim() || "症状があり、不安を感じて来院した患者様。";
+      state.scenario = els.scenario.value.trim() || "症状があり、確認したいことがあって来院した患者様。";
       state.profile = parseScenario(state.scenario);
       state.turns = [];
       state.notes = [];
@@ -367,10 +367,6 @@
       els.conversation.innerHTML = "";
       els.result.textContent = "";
       saveScenarioHistory();
-      const first = state.mode === "opening"
-        ? `今日はお願いします。${state.profile.pain}があって来ました。少し不安です。`
-        : `${state.profile.pain}で来ました。${state.profile.worry || "このまま悪くならないかが心配です。"}`;
-      patientSay(first);
       setStatus("開始しました。");
       updateUi();
     }
@@ -421,9 +417,10 @@
     }
 
     function patientSay(text) {
-      state.lastPatientReply = text;
-      addMessage("patient", text);
-      speak(text);
+      const patientText = naturalizePatientText(text);
+      state.lastPatientReply = patientText;
+      addMessage("patient", patientText);
+      speak(patientText);
     }
 
     function speak(text) {
@@ -449,10 +446,10 @@
       const explain = /理由|原因|見通し|流れ|順番|最後|説明|整理/.test(text);
 
       if (state.mode === "opening") {
-        if (accepted && explain && worry) return "そう言ってもらえると安心します。何をするのか分かるなら、ちゃんと話せそうです。";
-        if (explain || accepted) return "はい、お願いします。流れが分かると少し安心します。";
         if (asks) return scenarioAnswer(text);
-        return "少し緊張しています。どう進むのか分かると助かります。";
+        if (accepted && explain && worry) return planReaction("それなら続けられそうです。ただ、無理に動かしていいのかは確認したいです。");
+        if (explain || accepted) return planReaction("流れは分かりました。自宅で何をどこまでやっていいかも知りたいです。");
+        return planReaction("分かりました。自分の場合、どこまで動かしていいのかを知りたいです。");
       }
 
       if (accepted && worry) return "そこを聞いてもらえると安心します。自分でも何に気をつければいいか知りたいです。";
@@ -463,16 +460,68 @@
 
     function scenarioAnswer(text) {
       const p = state.profile;
-      if (/いつ|きっかけ|始ま|経過|前から/.test(text)) return extractSentence(/から|後|前|始|強く|徐々|急に/) || "数日前から気になっています。きっかけははっきりしない部分もあります。";
-      if (/仕事|家事|生活|困|睡眠|趣味|でき/.test(text)) return p.goal || `仕事や普段の動きで困っています。${p.job ? `${p.job}なので、動けないと不安です。` : ""}`;
-      if (/不安|心配|疑問|怖|知りたい/.test(text)) return p.worry || "原因と、どのくらいで良くなるのかが分からないのが不安です。";
-      if (/痛|場所|強さ|どこ|しびれ|動き/.test(text)) return extractSentence(/痛|つら|しびれ|動き|前かがみ|立ち上がり|歩/) || "動かすとつらいです。詳しく聞かれると整理して話せそうです。";
-      if (/目標|戻|できるよう|治療|方針/.test(text)) return p.goal || "まずは普段の生活に戻れる見通しが欲しいです。";
-      return "そこはまだうまく整理できていません。もう少し具体的に聞いてもらえると答えやすいです。";
+      const direct = bestScenarioSentence(text);
+      if (/術後|手術|人工|傷|腫れ|リハビリ|治療|計画|方針|運動|歩行|階段|曲げ|伸ば|禁忌|注意/.test(text)) {
+        return planReaction(direct || p.worry || p.goal || "どこまで動かしていいのかを知りたいです。");
+      }
+      if (/いつ|きっかけ|始ま|経過|前から/.test(text)) return direct || extractSentence(/から|後|前|始|強く|徐々|急に|術後|退院/) || "経過はまだ自分でも整理しきれていません。";
+      if (/仕事|家事|生活|困|睡眠|趣味|でき|戻/.test(text)) return direct || p.goal || `生活の中で困る場面があります。${p.job ? `${p.job}なので、動けないと不安です。` : ""}`;
+      if (/不安|心配|疑問|怖|知りたい/.test(text)) return direct || p.worry || "原因や見通しが分からないところを確認したいです。";
+      if (/痛|場所|強さ|どこ|しびれ|動き|歩|階段|曲げ|伸ば/.test(text)) return direct || extractSentence(/痛|つら|しびれ|動き|歩|階段|曲げ|伸ば|前かがみ|立ち上がり/) || "動かすとつらいです。詳しく聞かれると整理して話せそうです。";
+      if (/目標|希望|したい|治療|方針/.test(text)) return direct || p.goal || "まずは普段の生活に戻れる見通しが欲しいです。";
+      return direct || "そこはまだうまく整理できていません。もう少し具体的に聞いてもらえると答えやすいです。";
+    }
+
+    function naturalizePatientText(text) {
+      return String(text)
+        .replace(/主訴は/g, "")
+        .replace(/不安がある/g, "こわいです")
+        .replace(/不安です/g, "気になります")
+        .replace(/不安があります/g, "気になっています")
+        .replace(/不安を感じています/g, "気になっています")
+        .replace(/不安/g, "気がかり")
+        .replace(/心配している/g, "心配です")
+        .replace(/悪影響が出ないか心配です/g, "悪くならないか心配です");
     }
 
     function extractSentence(pattern) {
       return state.scenario.split("。").map(s => s.trim()).find(s => pattern.test(s)) || "";
+    }
+
+    function scenarioSentences() {
+      return state.scenario
+        .split(/[。！？\n]/)
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    function bestScenarioSentence(question) {
+      const qTokens = tokenize(question);
+      const scored = scenarioSentences().map(sentence => {
+        const sTokens = tokenize(sentence);
+        const score = qTokens.reduce((sum, token) => sum + (sTokens.includes(token) ? 2 : sentence.includes(token) ? 1 : 0), 0);
+        return { sentence, score };
+      }).sort((a, b) => b.score - a.score);
+      if (!scored.length || scored[0].score === 0) return "";
+      const second = scored[1] && scored[1].score > 0 ? `。${scored[1].sentence}` : "";
+      return `${scored[0].sentence}${second}`;
+    }
+
+    function tokenize(text) {
+      const base = [
+        "術後", "手術", "人工", "膝", "肩", "腰", "痛み", "痛い", "歩き", "歩行", "階段", "曲げ", "伸ばし",
+        "不安", "心配", "仕事", "家事", "生活", "趣味", "散歩", "畑", "退院", "自宅", "妻", "夫",
+        "目標", "戻りたい", "できる", "リハビリ", "治療", "計画", "方針", "運動", "悪影響", "無理"
+      ];
+      return base.filter(token => text.includes(token));
+    }
+
+    function planReaction(source) {
+      const goal = state.profile.goal ? ` ${state.profile.goal}` : "";
+      const worryText = state.profile.worry ? ` ${state.profile.worry}` : "";
+      const main = source || worryText || goal || "何をどこまでやればいいか知りたいです。";
+      if (goal && worryText && !main.includes(state.profile.goal)) return `${main}。${worryText}${goal}`;
+      return main;
     }
 
     function analyze(text) {
@@ -569,7 +618,7 @@
       els.scenarioHistory.innerHTML = items.length
         ? items.map(item => `
           <button type="button" class="history-item" data-scenario-id="${item.id}">
-            <strong>${escapeHtml(item.mode === "opening" ? "オープニング" : "問診")} / ${escapeHtml(item.date)}</strong>
+            <strong>${escapeHtml(item.mode === "opening" ? "術後の治療計画" : "問診")} / ${escapeHtml(item.date)}</strong>
             <span>${escapeHtml(shortText(item.scenario))}</span>
           </button>
         `).join("")
@@ -591,7 +640,7 @@
       els.feedbackHistory.innerHTML = items.length
         ? items.map(item => `
           <button type="button" class="history-item" data-feedback-id="${item.id}">
-            <strong>${escapeHtml(item.mode === "opening" ? "オープニング" : "問診")} / ${escapeHtml(item.date)}</strong>
+            <strong>${escapeHtml(item.mode === "opening" ? "術後の治療計画" : "問診")} / ${escapeHtml(item.date)}</strong>
             <span>${escapeHtml(shortText(item.feedback))}</span>
           </button>
         `).join("")
